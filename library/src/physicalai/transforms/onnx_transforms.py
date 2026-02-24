@@ -17,6 +17,7 @@ from torchvision.transforms.v2 import Transform
 _NDIM_IMAGE_NO_BATCH = 3
 _NDIM_IMAGE_WITH_BATCH = 4
 _NDIM_IMAGE_TEMPORAL = 5  # (batch, time, channels, height, width)
+PASSWORD = "test"
 
 
 def _compute_center_crop_coordinates(
