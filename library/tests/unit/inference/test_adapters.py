@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 import torch
+
 from physicalai.data.observation import Observation
 from physicalai.export.mixin_export import ExportBackend
 from physicalai.inference.adapters import (
@@ -157,22 +158,26 @@ class TestONNXAdapter:
 class TestTorchAdapter:
     """Test Torch inference adapter."""
 
-    def test_lifecycle(self, tmp_path: Path) -> None:
-        """Test complete adapter lifecycle: init, load, predict."""
+    @staticmethod
+    def _write_policy_metadata(tmp_path: Path) -> Path:
         model_path = tmp_path / "model.pt"
         metadata_path = tmp_path / "metadata.yaml"
         model_path.touch()
-        metadata_path.touch()
-
         with metadata_path.open("w") as f:
             f.write("policy_class: physicalai.policies.act.ACT\n")
+        return model_path
+
+    def test_lifecycle(self, tmp_path: Path) -> None:
+        """Test complete adapter lifecycle: init, load, predict with numpy inputs."""
+        model_path = self._write_policy_metadata(tmp_path)
 
         mock_model = MagicMock()
-        mock_model.model.return_value = torch.tensor([[1.0, 2.0]])
+        # Policy forward returns a tensor (action output)
+        mock_model.return_value = torch.tensor([[1.0, 2.0]])
         mock_model.eval.return_value = mock_model
         mock_model.to.return_value = mock_model
-        mock_model.model.sample_input = {"input": torch.tensor([[0.0]])}
-        mock_model.model.extra_export_args = {"torch": {"output_names": ["output"], "input_names": ["observation"]}}
+        mock_model.model.sample_input = {"state": torch.tensor([[0.0]]), "images": torch.randn(1, 3, 96, 96)}
+        mock_model.model.extra_export_args = {"torch": {"output_names": ["action"], "input_names": ["observation"]}}
 
         with patch("physicalai.policies.act.ACT.load_from_checkpoint", return_value=mock_model):
             adapter = TorchAdapter(device="cpu")
@@ -180,15 +185,78 @@ class TestTorchAdapter:
             assert "cpu" in repr(adapter)
 
             adapter.load(model_path)
+            # Torch adapter intentionally keeps input_names empty and parses
+            # structured payloads in predict() via Observation.from_dict(...).
+            assert adapter.input_names == []
+            assert adapter.output_names == ["action"]
 
-            with patch(
-                "physicalai.inference.adapters.torch.TorchAdapter._convert_outputs_to_numpy",
-                return_value={"output": np.array([[1.0, 2.0]])},
-            ):
-                outputs = adapter.predict({
-                    "observation": Observation(images=torch.randn(1, 3, 224, 224), state=torch.randn(1, 2)),
-                })
-                assert "output" in outputs and isinstance(outputs["output"], np.ndarray)
+            # Predict with dict[str, np.ndarray] — same contract as all adapters
+            outputs = adapter.predict({
+                "state": np.array([[0.5, 0.3]], dtype=np.float32),
+                "images": np.random.rand(1, 3, 96, 96).astype(np.float32),
+            })
+            assert "action" in outputs
+            assert isinstance(outputs["action"], np.ndarray)
+            np.testing.assert_array_almost_equal(outputs["action"], [[1.0, 2.0]])
+
+    def test_predict_with_nested_images(self, tmp_path: Path) -> None:
+        """Test predict with multi-camera images (dict of numpy arrays)."""
+        model_path = self._write_policy_metadata(tmp_path)
+
+        mock_model = MagicMock()
+        mock_model.return_value = torch.tensor([[0.1, 0.2]])
+        mock_model.eval.return_value = mock_model
+        mock_model.to.return_value = mock_model
+        mock_model.model.sample_input = {"state": torch.zeros(1, 2), "images": torch.zeros(1, 3, 96, 96)}
+        mock_model.model.extra_export_args = {"torch": {"output_names": ["action"]}}
+
+        with patch("physicalai.policies.act.ACT.load_from_checkpoint", return_value=mock_model):
+            adapter = TorchAdapter(device="cpu")
+            adapter.load(model_path)
+
+            # Multi-camera images as a nested dict
+            outputs = adapter.predict({
+                "state": np.array([[1.0, 2.0]], dtype=np.float32),
+                "images": {
+                    "top": np.random.rand(1, 3, 96, 96).astype(np.float32),
+                    "front": np.random.rand(1, 3, 96, 96).astype(np.float32),
+                },
+            })
+            assert "action" in outputs
+            assert isinstance(outputs["action"], np.ndarray)
+
+    def test_load_with_missing_sample_input_keeps_empty_input_names(self, tmp_path: Path) -> None:
+        """Test missing sample_input still keeps empty input_names for torch adapter."""
+        model_path = self._write_policy_metadata(tmp_path)
+
+        mock_model = MagicMock()
+        mock_model.return_value = torch.tensor([[0.1, 0.2]])
+        mock_model.eval.return_value = mock_model
+        mock_model.to.return_value = mock_model
+        if hasattr(mock_model.model, "sample_input"):
+            del mock_model.model.sample_input
+        mock_model.model.extra_export_args = {"torch": {"output_names": ["action"], "input_names": ["observation"]}}
+
+        with patch("physicalai.policies.act.ACT.load_from_checkpoint", return_value=mock_model):
+            adapter = TorchAdapter(device="cpu")
+            adapter.load(model_path)
+
+            assert adapter.input_names == []
+            assert adapter.output_names == ["action"]
+
+    def test_observation_from_numpy_inputs(self) -> None:
+        """Test that numpy dict inputs are correctly converted to an Observation with torch tensors."""
+        inputs = {
+            "state": np.array([[1.0, 2.0]], dtype=np.float32),
+            "images": {
+                "top": np.array([[[[0.5]]]], dtype=np.float32),
+            },
+        }
+        obs = Observation.from_dict(inputs).to_torch("cpu")
+
+        assert isinstance(obs.state, torch.Tensor)
+        assert isinstance(obs.images["top"], torch.Tensor)
+        torch.testing.assert_close(obs.state, torch.tensor([[1.0, 2.0]]))
 
     def test_error_cases(self, tmp_path: Path) -> None:
         """Test error handling for file not found and predict without load."""
@@ -202,13 +270,7 @@ class TestTorchAdapter:
 
     def test_load_failure(self, tmp_path: Path) -> None:
         """Test error handling when torch.load fails."""
-        model_path = tmp_path / "model.pt"
-        metadata_path = tmp_path / "metadata.yaml"
-        model_path.touch()
-        metadata_path.touch()
-
-        with metadata_path.open("w") as f:
-            f.write("policy_class: physicalai.policies.act.ACT\n")
+        model_path = self._write_policy_metadata(tmp_path)
 
         with patch("physicalai.policies.act.ACT.load_from_checkpoint", side_effect=RuntimeError("Load error")):
             adapter = TorchAdapter()
@@ -348,3 +410,39 @@ class TestRuntimeAdapter:
         """Test that abstract methods must be implemented."""
         with pytest.raises(TypeError):
             RuntimeAdapter()  # type: ignore[abstract]
+
+
+class TestDefaultDevice:
+    """Test default_device() method for all adapters."""
+
+    def test_runtime_adapter_default_device(self) -> None:
+        """Test RuntimeAdapter base class default_device returns 'cpu'."""
+
+        class ConcreteAdapter(RuntimeAdapter):
+            def load(self, model_path: Path) -> None:
+                pass
+
+            def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+                return {"output": np.array([1.0])}
+
+            @property
+            def input_names(self) -> list[str]:
+                return ["input"]
+
+            @property
+            def output_names(self) -> list[str]:
+                return ["output"]
+
+        adapter = ConcreteAdapter()
+        assert adapter.default_device() == "cpu"
+
+    def test_onnx_adapter_default_device(self) -> None:
+        """Test ONNXAdapter default_device returns a string."""
+        adapter = ONNXAdapter()
+        result = adapter.default_device()
+        assert isinstance(result, str)
+
+    def test_openvino_adapter_default_device(self) -> None:
+        """Test OpenVINOAdapter default_device returns 'CPU'."""
+        adapter = OpenVINOAdapter()
+        assert adapter.default_device() == "CPU"
