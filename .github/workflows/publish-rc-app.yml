@@ -94,6 +94,26 @@ jobs:
           fi
           echo "✓ Tag is correctly assigned to release branch ${EXPECTED_BRANCH}"
 
+          # Validate base release exists for patch releases
+          PATCH_VERSION="${TAG_VERSION##*.}"
+          if [[ "$PATCH_VERSION" != "0" ]]; then
+            BASE_VERSION="${TAG_VERSION%.*}.0"
+            BASE_TAG="app/v${BASE_VERSION}"
+            
+            echo "::group::Patch release validation"
+            echo "Patch version detected: $TAG_VERSION"
+            echo "Base version: $BASE_VERSION"
+            echo "Expected base tag: $BASE_TAG"
+            echo "::endgroup::"
+            
+            if ! git rev-parse --verify "refs/tags/${BASE_TAG}" >/dev/null 2>&1; then
+              echo "::error::Patch release tag '${TAG}' requires base release tag '${BASE_TAG}' to exist"
+              echo "::error::Cannot release patch version ${TAG_VERSION} without base version ${BASE_VERSION}"
+              exit 1
+            fi
+            echo "✓ Base release tag ${BASE_TAG} exists"
+          fi
+
           echo "rc_version=$RC_VERSION" >> "$GITHUB_OUTPUT"
 
   publish-rc:
@@ -144,3 +164,50 @@ jobs:
         uses: open-edge-platform/geti-ci/actions/sign-image@9b1ef60a8b2b802da428621e192c322960f4b3d5
         with:
           image-uri: ${{ steps.meta.outputs.tags }}
+
+      - name: Output summary
+        env:
+          RC_VERSION: ${{ needs.validate.outputs.rc_version }}
+          DEVICE: ${{ matrix.device }}
+          IMAGE_TAG: ${{ steps.meta.outputs.tags }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## ✅ Release Candidate Published
+
+          ### Release Information
+          - **RC Version:** \`${RC_VERSION}\`
+          - **Device:** \`${DEVICE}\`
+          - **Repository:** \`${GITHUB_REPOSITORY}\`
+          - **Commit:** \`${GITHUB_SHA:0:8}\`
+
+          ### Published Image
+          \`\`\`
+          ${IMAGE_TAG}
+          \`\`\`
+
+          ### Quick Access
+          - 📦 [View Package on GHCR](https://github.com/${REPO_OWNER}?tab=packages&repo_name=${GITHUB_REPOSITORY#*/})
+          - 🔍 [View Workflow Run](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+          - 🏷️ [View Tag](https://github.com/${GITHUB_REPOSITORY}/releases/tag/app/v${RC_VERSION})
+
+          ### Pull Image
+          \`\`\`bash
+          docker pull ${IMAGE_TAG}
+          \`\`\`
+
+          ### Verify Signature
+          \`\`\`bash
+          cosign verify ${IMAGE_TAG} \\
+            --certificate-identity-regexp="^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/.+" \\
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
+          \`\`\`
+
+          ### Next Steps
+          1. Test the RC image using manual/automated tests
+          2. If issues found, apply fixes to release branch and create new RC
+          3. Once approved, promote RC to final release using release workflow
+
+          ---
+          *Image signed with Cosign (keyless mode) • Build cache disabled for reproducibility*
+          EOF
