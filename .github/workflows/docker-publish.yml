@@ -50,7 +50,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
-          images: ghcr.io/AlexanderBarabanov/physical-ai-studio-${{ matrix.device }} # TODO: own acc
+          images: ghcr.io/AlexanderBarabanov/test-image-${{ matrix.device }} # TODO: own acc
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}-dev-${{ steps.version.outputs.short-sha }}
             type=raw,value=${{ github.ref_name }}

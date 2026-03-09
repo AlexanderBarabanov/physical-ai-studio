@@ -66,4 +66,4 @@ runs:
         # Cache reads always work (public packages); writes require
         # packages:write which fork PRs do not have.
         cache-from: type=registry,ref=ghcr.io/open-edge-platform/physical-ai-studio-${{ inputs.device }}:buildcache
-        cache-to: ${{ inputs.cache-write == 'true' && format('type=registry,ref=ghcr.io/open-edge-platform/physical-ai-studio-{0}:buildcache,mode=max', inputs.device) || '' }}
+        cache-to: ${{ inputs.cache-write == 'true' && format('type=registry,ref=ghcr.io/AlexanderBarabanov/physical-ai-studio-{0}:buildcache,mode=max', inputs.device) || '' }}
