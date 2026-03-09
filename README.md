@@ -24,6 +24,8 @@
 
 Physical AI Studio is an end-to-end framework for teaching robots to perform tasks through imitation learning from human demonstrations.
 
+New features
+
 ## Key Features
 
 - **End-to-End Pipeline** - From demonstration recording to robot deployment
