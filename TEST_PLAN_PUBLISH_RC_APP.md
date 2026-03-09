@@ -207,45 +207,47 @@ git push --delete origin app/v0.1.0rc3
 git tag -d app/v0.1.0rc3
 ```
 
+
 ---
 
-### Test Scenario 5: Invalid VERSION Format
+### Test Scenario 5: Sequential RC Validation - Skip RC Number ⚠️ NEW
 
-**Purpose:** Validate VERSION file semver format
+**Purpose:** Validate that RC tags must be created sequentially (cannot skip from rc1 to rc3)
 
-**Setup:**
-```powershell
-git checkout release/app-0.1
-
-# Set invalid VERSION format (missing patch)
-echo "0.1" | Out-File -NoNewline -Encoding utf8 application\VERSION
-git add application\VERSION
-git commit -m "Invalid VERSION format"
-git push origin release/app-0.1
-```
+**Prerequisites:** Complete Test Scenario 1 (app/v0.1.0rc1 exists)
 
 **Execute:**
 ```powershell
-git tag app/v0.1.0rc4
-git push origin app/v0.1.0rc4
+# Try to create RC3 when only RC1 exists (skipping RC2)
+git checkout release/app-0.1
+
+# Make a change
+echo "`n# RC3 test" | Add-Content README.md
+git add README.md
+git commit -m "Test change for RC3"
+git push origin release/app-0.1
+
+# Create RC3 tag (skipping RC2)
+git tag app/v0.1.0rc3
+git push origin app/v0.1.0rc3
 ```
 
 **Expected Results:**
 - ❌ Validation fails with error:
   ```
-  VERSION file contains invalid semver format: '0.1'
+  RC tag 'app/v0.1.0rc3' requires previous RC tag 'app/v0.1.0rc2' to exist
+  Cannot create RC3 without first creating RC2
+  Please create RC tags sequentially: rc1, rc2, rc3, ...
   ```
 - ❌ Build does not proceed
+- ℹ️ Sequential RC validation section shown in logs
 
 **Cleanup:**
 ```powershell
-echo "0.1.0" | Out-File -NoNewline -Encoding utf8 application\VERSION
-git add application\VERSION
-git commit -m "Fix VERSION format"
-git push origin release/app-0.1
-
-git push --delete origin app/v0.1.0rc4
-git tag -d app/v0.1.0rc4
+git push --delete origin app/v0.1.0rc3
+git tag -d app/v0.1.0rc3
+git reset --hard HEAD~1
+git push -f origin release/app-0.1
 ```
 
 ---
@@ -278,7 +280,7 @@ git tag -d app/v0.1.0rc5
 
 ---
 
-### Test Scenario 7: Release Branch Doesn't Exist
+### Test Scenario 8: Release Branch Doesn't Exist
 
 **Purpose:** Validate release branch must exist before tagging
 
@@ -305,7 +307,7 @@ git tag -d app/v0.2.0rc1
 
 ---
 
-### Test Scenario 9: Invalid Tag Format
+### Test Scenario 10: Invalid Tag Format
 
 **Purpose:** Validate tag format pattern matching
 
@@ -327,9 +329,14 @@ git push --delete origin app/v0.1.0
 git tag -d app/v0.1.0
 ```
 
----
 
-### Test Scenario 10: Verify Image Metadata
+
+
+---
+------- START HERE --------
+
+
+### Test Scenario 11: Verify Image Metadata
 
 **Purpose:** Validate OCI labels and metadata
 
@@ -361,7 +368,9 @@ cosign verify ghcr.io/alexanderbarabanov/test-image-cpu:0.1.0rc1 `
 
 ---
 
-### Test Scenario 11: Cache Disabled Verification
+### Test Scenario 12: Cache Disabled Verification
+
+TODO: need to properly review this code -> did we really do not use cache?
 
 **Purpose:** Verify build cache is disabled for RC builds
 
@@ -381,7 +390,7 @@ Look for the docker build output - should not contain cache import statements
 
 ---
 
-### Test Scenario 12: Patch Release Without Base Tag ⚠️ NEW
+### Test Scenario 13: Patch Release Without Base Tag ⚠️ NEW
 
 **Purpose:** Validate that patch releases require base release tag to exist
 
@@ -430,7 +439,7 @@ git branch -D release/app-0.2
 
 ---
 
-### Test Scenario 13: Valid Patch Release (With Base Tag) ⚠️ NEW
+### Test Scenario 14: Valid Patch Release (With Base Tag) ⚠️ NEW
 
 **Purpose:** Validate successful patch release with proper base tag
 
@@ -475,15 +484,15 @@ git push origin app/v0.3.1rc1
 - ✅ Image builds: `ghcr.io/alexanderbarabanov/test-image-cpu:0.3.1rc1`
 - ✅ Image is signed
 
-**Cleanup:** Keep for Scenario 14
+**Cleanup:** Keep for Scenario 15
 
 ---
 
-### Test Scenario 14: Multiple Sequential Patches ⚠️ NEW
+### Test Scenario 15: Multiple Sequential Patches ⚠️ NEW
 
 **Purpose:** Validate multiple patches from same base version
 
-**Prerequisites:** Complete Test Scenario 13 first
+**Prerequisites:** Complete Test Scenario 14 first
 
 **Setup:**
 ```powershell
@@ -602,6 +611,7 @@ Use this checklist to verify complete workflow functionality:
 
 - [ ] ✅ Valid RC tags trigger successful builds
 - [ ] ❌ Invalid RC numbers (rc0) are rejected
+- [ ] ❌ **RC tags must be created sequentially (cannot skip RC numbers)**
 - [ ] ❌ VERSION mismatches are caught
 - [ ] ❌ Invalid semver formats are rejected
 - [ ] ✅ Tags must be on correct release branch
@@ -626,18 +636,17 @@ Execute tests in this order for comprehensive validation:
 |-------|----------|------|----------|---------|
 | 1 | Scenario 1 | ✅ Pass | 10 min | Happy path baseline |
 | 2 | Scenario 2 | ✅ Pass | 10 min | Incremental RC |
-| 3 | Scenario 10 | ✅ Pass | 5 min | Metadata verification |
-| 4 | Scenario 11 | ✅ Pass | 2 min | Cache verification |
+| 3 | Scenario 11 | ✅ Pass | 5 min | Metadata verification |
+| 4 | Scenario 12 | ✅ Pass | 2 min | Cache verification |
 | 5 | Scenario 3 | ❌ Fail | 1 min | RC number validation |
-| 6 | Scenario 4 | ❌ Fail | 2 min | Version mismatch |
-| 7 | Scenario 5 | ❌ Fail | 2 min | Semver format |
+| 6 | Scenario 5 | ❌ Fail | 1 min | Sequential RC validation |
+| 7 | Scenario 4 | ❌ Fail | 2 min | Version mismatch |
 | 8 | Scenario 6 | ❌ Fail | 1 min | Wrong branch |
-| 9 | Scenario 7 | ❌ Fail | 1 min | Missing branch |
-| 10 | Scenario 8 | ❌ Fail | 2 min | Missing files |
-| 11 | Scenario 9 | ℹ️ Skip | 1 min | Pattern mismatch |
-| 12 | Scenario 12 | ❌ Fail | 2 min | Patch without base |
-| 13 | Scenario 13 | ✅ Pass | 10 min | Valid patch release |
-| 14 | Scenario 14 | ✅ Pass | 10 min | Multiple patches |
+| 9 | Scenario 8 | ❌ Fail | 1 min | Missing branch |
+| 10 | Scenario 10 | ℹ️ Skip | 1 min | Pattern mismatch |
+| 11 | Scenario 13 | ❌ Fail | 2 min | Patch without base |
+| 12 | Scenario 14 | ✅ Pass | 10 min | Valid patch release |
+| 13 | Scenario 15 | ✅ Pass | 10 min | Multiple patches |
 
 **Total Time:** ~60-90 minutes (including wait times for builds)
 
@@ -692,3 +701,18 @@ Once all tests pass:
 - [publish-rc-app.yml](../.github/workflows/publish-rc-app.yml) - Workflow source
 - [Dockerfile](../application/docker/Dockerfile) - Minimal test Dockerfile
 - [Cosign Documentation](https://docs.sigstore.dev/cosign/) - Image signing reference
+
+
+
+TODO
+
+Line 28: TAG: ${{ github.ref_name }} is used directly without initial validation
+
+Risk: Although GitHub Actions provides this, there's no explicit check that github.ref_name matches the expected format before the bash script runs. A malformed ref name could cause unexpected behavior.
+
+Fix: Add explicit validation:
+
+if ! [[ "$TAG" =~ ^app/v[0-9]+\.[0-9]+\.[0-9]+rc[0-9]+$ ]]; then
+  echo "::error::Invalid tag format: $TAG"
+  exit 1
+fi
