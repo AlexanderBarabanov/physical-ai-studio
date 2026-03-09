@@ -26,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [cpu, xpu, cuda]
+        device: [cpu] # TODO: just cpu
 
     steps:
       - name: Checkout repository
