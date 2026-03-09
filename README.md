@@ -22,7 +22,7 @@
 
 ## What is Physical AI Studio?
 
-Physical AI Studio is an end-to-end framework for teaching robots to perform tasks through imitation learning from human demonstrations.
+Physical AI Studio is an end-to-end framework for teaching robots to perform tasks through imitation learning from human demonstrations. Add Add
 
 ## Key Features
 
