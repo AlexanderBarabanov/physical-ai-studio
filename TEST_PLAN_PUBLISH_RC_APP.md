@@ -75,6 +75,8 @@ git tag app/v0.1.0rc1
 git push origin app/v0.1.0rc1
 ```
 
+**Note:** If you encounter "Release branch does not exist" error, ensure the workflow has `fetch-depth: 0` in the checkout step (already fixed in current version).
+
 **Expected Results:**
 - ✅ Workflow triggers automatically
 - ✅ Validation job passes all checks:
@@ -627,6 +629,7 @@ https://github.com/alexanderbarabanov/test-image-cpu/pkgs/container/test-image-c
 |-------|-------|----------|
 | 403 Forbidden on GHCR | Workflow permissions | Enable "Read and write permissions" in Settings → Actions |
 | Workflow doesn't trigger | Tag pattern mismatch | Ensure tag matches `app/v[0-9]+\.[0-9]+\.[0-9]+rc[0-9]+` |
+| "Release branch does not exist" error | Shallow checkout | Fixed: workflow now uses `fetch-depth: 0` to fetch all branches |
 | Cache errors | Expected with `use-cache: false` | These warnings are expected for RC builds |
 | Sign-image failures | Missing `id-token: write` | Permission is already configured in workflow |
 | Build context warnings | `libs=library` unused | Expected with minimal Dockerfile, not an error |
