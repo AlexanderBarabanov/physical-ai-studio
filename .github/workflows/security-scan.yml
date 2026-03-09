@@ -8,11 +8,13 @@ on:
   push:
     branches:
       - main
-      - releases/**
+      - release/lib-*.*   # Library release branches: release/lib-<major>.<minor>
+      - release/app-*.*   # Application release branches: release/app-<major>.<minor>
   pull_request:
     branches:
       - main
-      - releases/**
+      - release/lib-*.*   # Library release branches: release/lib-<major>.<minor>
+      - release/app-*.*   # Application release branches: release/app-<major>.<minor>
 
 permissions: {} # No permissions by default
 
