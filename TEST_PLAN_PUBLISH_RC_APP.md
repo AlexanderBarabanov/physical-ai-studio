@@ -305,46 +305,6 @@ git tag -d app/v0.2.0rc1
 
 ---
 
-### Test Scenario 8: Missing Required Files
-
-**Purpose:** Validate required files existence check
-
-**Setup:**
-```powershell
-git checkout release/app-0.1
-
-# Temporarily remove Dockerfile (simulate missing file)
-git mv application/docker/Dockerfile application/docker/Dockerfile.bak
-git commit -m "Remove Dockerfile temporarily"
-git push origin release/app-0.1
-```
-
-**Execute:**
-```powershell
-git tag app/v0.1.0rc6
-git push origin app/v0.1.0rc6
-```
-
-**Expected Results:**
-- ❌ Validation fails with error:
-  ```
-  Required file missing: application/docker/Dockerfile
-  ```
-- ❌ Build does not proceed
-
-**Cleanup:**
-```powershell
-git checkout release/app-0.1
-git mv application/docker/Dockerfile.bak application/docker/Dockerfile
-git commit -m "Restore Dockerfile"
-git push origin release/app-0.1
-
-git push --delete origin app/v0.1.0rc6
-git tag -d app/v0.1.0rc6
-```
-
----
-
 ### Test Scenario 9: Invalid Tag Format
 
 **Purpose:** Validate tag format pattern matching
