@@ -83,6 +83,9 @@ jobs:
           # Validate expected release branch exists
           if ! git rev-parse --verify "origin/${EXPECTED_BRANCH}" >/dev/null 2>&1; then
             echo "::error::Release branch '${EXPECTED_BRANCH}' does not exist"
+            echo "::error::Expected to find: origin/${EXPECTED_BRANCH}"
+            echo "::error::Available release branches:"
+            git branch -r | grep "origin/release/app-" || echo "  (none found)"
             exit 1
           fi
           echo "✓ Release branch exists"
