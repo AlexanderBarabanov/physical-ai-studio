@@ -9,7 +9,7 @@ permissions: {} # No permissions by default
 
 jobs:
   validate:
-    name: Validate tag and VERSION
+    name: Validate tag
     runs-on: ubuntu-latest
     permissions:
       contents: read
