@@ -28,7 +28,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          set -euo pipefail  # Exit on error, undefined vars, pipe failures
+          set -euo pipefail
           
           # Extract version from tag: app/v0.1.0rc1 -> 0.1.0rc1
           RC_VERSION="${TAG#app/v}"
@@ -184,7 +184,7 @@ jobs:
           push: "true"
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          use-cache: "false" # Disable cache for RC builds (security & reproducibility)
+          use-cache: "false" # Disable cache for RC builds (security and reproducibility)
 
       - name: Sign Docker image
         uses: open-edge-platform/geti-ci/actions/sign-image@9b1ef60a8b2b802da428621e192c322960f4b3d5
@@ -210,11 +210,6 @@ jobs:
           \`\`\`
           ${IMAGE_TAG}
           \`\`\`
-
-          ### Quick Access
-          - 📦 [View Container Package on GHCR](https://github.com/${REPO_OWNER}?tab=packages&repo_name=${GITHUB_REPOSITORY#*/})
-          - 🔍 [View Workflow Run](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
-          - 🏷️ [View Tag](https://github.com/${GITHUB_REPOSITORY}/releases/tag/app/v${RC_VERSION})
 
           ### Pull Container Image
           \`\`\`bash
