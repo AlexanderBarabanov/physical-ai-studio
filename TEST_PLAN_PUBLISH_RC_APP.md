@@ -704,15 +704,3 @@ Once all tests pass:
 
 
 
-TODO
-
-Line 28: TAG: ${{ github.ref_name }} is used directly without initial validation
-
-Risk: Although GitHub Actions provides this, there's no explicit check that github.ref_name matches the expected format before the bash script runs. A malformed ref name could cause unexpected behavior.
-
-Fix: Add explicit validation:
-
-if ! [[ "$TAG" =~ ^app/v[0-9]+\.[0-9]+\.[0-9]+rc[0-9]+$ ]]; then
-  echo "::error::Invalid tag format: $TAG"
-  exit 1
-fi

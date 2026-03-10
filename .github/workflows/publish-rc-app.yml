@@ -8,8 +8,8 @@ on:
 permissions: {} # No permissions by default
 
 jobs:
-  validate:
-    name: Validate tag
+  validate-rc-tag:
+    name: Validate RC tag
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [cpu] # TODO: add xpu, cuda when ready
+        device: [cpu, xpu] # TODO: add xpu, cuda when ready
 
     steps:
       - name: Checkout repository
