@@ -65,6 +65,9 @@ runs:
         # When not pushing, validate the build and populate the cache only.
         outputs: ${{ inputs.push != 'true' && 'type=cacheonly' || '' }}
         build-args: GIT_SHA=${{ github.sha }}
+        # Disable all caching (local and remote) when use-cache=false to
+        # ensure reproducible builds for RC/release without any cached layers.
+        no-cache: ${{ inputs.use-cache != 'true' }}
         # Registry-based cache: each device variant gets its own cache
         # image in GHCR, avoiding the 10 GB GHA cache limit that caused
         # cache thrashing across cpu/xpu/cuda scopes (~18-20 GB total).
