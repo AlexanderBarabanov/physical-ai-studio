@@ -28,6 +28,8 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
+          set -euo pipefail  # Exit on error, undefined vars, pipe failures
+          
           # Extract version from tag: app/v0.1.0rc1 -> 0.1.0rc1
           RC_VERSION="${TAG#app/v}"
 
@@ -141,7 +143,7 @@ jobs:
           echo "rc_version=$RC_VERSION" >> "$GITHUB_OUTPUT"
 
   publish-rc:
-    name: Build & Push RC (${{ matrix.device }})
+    name: Build and push container RC (${{ matrix.device }})
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -152,7 +154,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [cpu, xpu] # TODO: add xpu, cuda when ready
+        device: [cpu, cpu] # TODO: add xpu, cuda when ready
 
     steps:
       - name: Checkout repository
@@ -197,28 +199,29 @@ jobs:
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
           cat >> $GITHUB_STEP_SUMMARY <<EOF
-          ## ✅ Release Candidate Published
+          ## ✅ Release Candidate Container Image Published
 
-          ### Release Information
+          ### Release Candidate Information
           - **RC Version:** \`${RC_VERSION}\`
+          - **Device:** \`${DEVICE}\`
           - **Commit:** \`${GITHUB_SHA:0:8}\`
 
-          ### Published Image
+          ### Published Container Image
           \`\`\`
           ${IMAGE_TAG}
           \`\`\`
 
           ### Quick Access
-          - 📦 [View Package on GHCR](https://github.com/${REPO_OWNER}?tab=packages&repo_name=${GITHUB_REPOSITORY#*/})
+          - 📦 [View Container Package on GHCR](https://github.com/${REPO_OWNER}?tab=packages&repo_name=${GITHUB_REPOSITORY#*/})
           - 🔍 [View Workflow Run](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
           - 🏷️ [View Tag](https://github.com/${GITHUB_REPOSITORY}/releases/tag/app/v${RC_VERSION})
 
-          ### Pull Image
+          ### Pull Container Image
           \`\`\`bash
           docker pull ${IMAGE_TAG}
           \`\`\`
 
-          ### Verify Signature
+          ### Verify Container Image Signature
           \`\`\`bash
           cosign verify ${IMAGE_TAG} \\
             --certificate-identity-regexp="^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/.+" \\
