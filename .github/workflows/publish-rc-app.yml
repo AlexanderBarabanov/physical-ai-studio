@@ -8,7 +8,7 @@ on:
 permissions: {} # No permissions by default
 
 jobs:
-  validate-rc-tag:
+  validate:
     name: Validate RC tag
     runs-on: ubuntu-latest
     permissions:
@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # Fetch all history and branches for validation
 
-      - name: Validate tag
+      - name: Validate RC tag
         id: validate
         env:
           TAG: ${{ github.ref_name }}
