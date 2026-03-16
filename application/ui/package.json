@@ -29,8 +29,8 @@
     },
     "dependencies": {
         "@adobe/react-spectrum": "^3.41.0",
-        "@geti/config": "*",
-        "@geti/ui": "*",
+        "@geti/config": "github:open-edge-platform/geti.git/web_ui/packages/config#66e564274dbc35e173b78802587060e463846060",
+        "@geti/ui": "github:open-edge-platform/geti.git/web_ui/packages/ui#66e564274dbc35e173b78802587060e463846060",
         "@react-three/drei": "^10.7.6",
         "@react-three/fiber": "^9.4.0",
         "@scalar/api-reference-react": "^0.7.48",
