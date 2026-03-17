@@ -29,8 +29,8 @@
     },
     "dependencies": {
         "@adobe/react-spectrum": "^3.41.0",
-        "@geti/config": "file:packages/config",
-        "@geti/ui": "file:packages/ui",
+        "@geti/config": "file:../packages/config",
+        "@geti/ui": "file:../packages/ui",
         "@react-three/drei": "^10.7.6",
         "@react-three/fiber": "^9.4.0",
         "@scalar/api-reference-react": "^0.7.48",
