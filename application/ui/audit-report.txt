@@ -1,0 +1,84 @@
+# npm audit report
+
+unhead  <=2.1.10
+Severity: moderate
+Unhead Vulnerable to Bypass of URI Scheme Sanitization in makeTagSafe via Case-Sensitivity - https://github.com/advisories/GHSA-5339-hvwr-7582
+Unhead has XSS bypass in `useHeadSafe` via attribute name injection and case-sensitive protocol check - https://github.com/advisories/GHSA-g5xx-pwrp-g3fv
+fix available via `npm audit fix --force`
+Will install @scalar/api-reference-react@0.9.17, which is a breaking change
+node_modules/unhead
+  @unhead/vue  <=0.6.3 || 1.0.22 - 2.1.10
+  Depends on vulnerable versions of unhead
+  node_modules/@unhead/vue
+    @scalar/api-reference  1.24.15 - 1.44.20
+    Depends on vulnerable versions of @scalar/api-client
+    Depends on vulnerable versions of @scalar/components
+    Depends on vulnerable versions of @scalar/json-magic
+    Depends on vulnerable versions of @scalar/oas-utils
+    Depends on vulnerable versions of @scalar/openapi-parser
+    Depends on vulnerable versions of @scalar/workspace-store
+    Depends on vulnerable versions of @unhead/vue
+    node_modules/@scalar/api-reference
+      @scalar/api-reference-react  0.7.24 - 0.8.8
+      Depends on vulnerable versions of @scalar/api-reference
+      node_modules/@scalar/api-reference-react
+
+yaml  2.0.0 - 2.8.2
+Severity: moderate
+yaml is vulnerable to Stack Overflow via deeply nested YAML collections - https://github.com/advisories/GHSA-48c2-rrv3-qjmp
+fix available via `npm audit fix --force`
+Will install @scalar/api-reference-react@0.9.17, which is a breaking change
+node_modules/@scalar/api-client/node_modules/yaml
+node_modules/@scalar/import/node_modules/yaml
+node_modules/@scalar/json-magic/node_modules/yaml
+node_modules/@scalar/oas-utils/node_modules/yaml
+node_modules/@scalar/openapi-parser/node_modules/yaml
+node_modules/@scalar/workspace-store/node_modules/yaml
+  @scalar/api-client  2.5.13 - 2.14.0
+  Depends on vulnerable versions of @scalar/components
+  Depends on vulnerable versions of @scalar/import
+  Depends on vulnerable versions of @scalar/json-magic
+  Depends on vulnerable versions of @scalar/oas-utils
+  Depends on vulnerable versions of @scalar/openapi-parser
+  Depends on vulnerable versions of @scalar/postman-to-openapi
+  Depends on vulnerable versions of @scalar/use-codemirror
+  Depends on vulnerable versions of @scalar/workspace-store
+  Depends on vulnerable versions of yaml
+  node_modules/@scalar/api-client
+  @scalar/import  0.4.12 - 0.4.37
+  Depends on vulnerable versions of @scalar/openapi-parser
+  Depends on vulnerable versions of yaml
+  node_modules/@scalar/import
+  @scalar/json-magic  <=0.8.4
+  Depends on vulnerable versions of yaml
+  node_modules/@scalar/json-magic
+    @scalar/oas-utils  0.4.9 - 0.6.6
+    Depends on vulnerable versions of @scalar/json-magic
+    Depends on vulnerable versions of @scalar/workspace-store
+    Depends on vulnerable versions of yaml
+    node_modules/@scalar/oas-utils
+      @scalar/components  0.14.14 - 0.16.6
+      Depends on vulnerable versions of @scalar/oas-utils
+      node_modules/@scalar/components
+        @scalar/use-codemirror  0.12.15 - 0.13.0
+        Depends on vulnerable versions of @scalar/components
+        node_modules/@scalar/use-codemirror
+      @scalar/postman-to-openapi  0.3.12 - 0.3.47
+      Depends on vulnerable versions of @scalar/oas-utils
+      node_modules/@scalar/postman-to-openapi
+    @scalar/openapi-parser  0.18.1 - 0.23.5
+    Depends on vulnerable versions of @scalar/json-magic
+    Depends on vulnerable versions of yaml
+    node_modules/@scalar/openapi-parser
+    @scalar/workspace-store  0.8.0 - 0.22.1
+    Depends on vulnerable versions of @scalar/json-magic
+    Depends on vulnerable versions of yaml
+    node_modules/@scalar/workspace-store
+
+14 vulnerabilities (1 low, 13 moderate)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
