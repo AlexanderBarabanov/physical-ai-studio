@@ -70,30 +70,18 @@ jobs:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PEM }}
 
-      - name: Get app details
-        if: steps.check-changes.outputs.changed == 'true'
-        id: app-details
-        run: |
-          APP_SLUG=$(gh api /app --jq '.slug')
-          BOT_USER=$(gh api "/users/${APP_SLUG}[bot]" --jq '.id')
-          echo "author=${APP_SLUG}[bot] <${BOT_USER}+${APP_SLUG}[bot]@users.noreply.github.com>" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
-
       - name: Create PR if lockfile changed
         if: steps.check-changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v7.0.5
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
-          author: ${{ steps.app-details.outputs.author }}
-          committer: ${{ steps.app-details.outputs.author }}
+          author: test-renovate-bot-12345[bot] <211697243+test-renovate-bot-12345[bot]@users.noreply.github.com>
+          committer: test-renovate-bot-12345[bot] <211697243+test-renovate-bot-12345[bot]@users.noreply.github.com>
           commit-message: "fix(deps): automated npm audit fixes [security]"
           title: "fix(deps): automated npm audit fixes [security]"
           body: |
             This PR was automatically created to update NPM dependencies with:
-
             ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only --audit-level=moderate`' }}
-
           branch: "npm-audit-fix-${{ github.run_id }}"
           base: main
           delete-branch: true
