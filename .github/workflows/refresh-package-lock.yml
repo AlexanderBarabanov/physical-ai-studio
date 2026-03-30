@@ -2,7 +2,7 @@ name: Weekly Dependency Audit Fix
 
 on:
   schedule:
-    - cron: '0 5 * * 1'
+    - cron: "0 5 * * 1"
   workflow_dispatch: {}
 permissions: {} # No permissions by default on workflow level
 
@@ -30,9 +30,10 @@ jobs:
 
       - name: Run npm audit fix (lockfile-only)
         working-directory: application/ui
+        continue-on-error: true
         run: |
-          set -e
-          npm audit fix --package-lock-only
+          npm audit fix --package-lock-only || true
+          npm audit > audit-report.txt || true
 
       - name: Check for changes
         id: check-changes
@@ -42,6 +43,11 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+          if [ -f audit-report.txt ]; then
+            echo "audit-report<<EOF" >> $GITHUB_OUTPUT
+            cat audit-report.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
 
       - name: Create PR if lockfile changed
@@ -61,9 +67,13 @@ jobs:
             ## Testing
             Run the full test suite on this PR before merging.
 
+            ## Notes
+            Some vulnerabilities may require breaking changes and cannot be fixed automatically.
+            Review the audit report and consider running `npm audit fix --force` locally if needed,
+            or update dependencies manually to resolve remaining issues.
+
             ## Automation
             This PR was automatically created by the Weekly Dependency Audit Fix workflow.
           branch: "audit-fix-${{ github.run_id }}"
           base: main
-          labels: dependencies
           delete-branch: true
