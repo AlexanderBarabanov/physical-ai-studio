@@ -56,7 +56,7 @@ jobs:
         id: check-changes
         working-directory: application/ui
         run: |
-          if git diff --quiet package-lock.json; then
+          if git diff --quiet package-lock.json package.json; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -67,8 +67,10 @@ jobs:
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v7.0.5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(security): automated npm audit fixes"
-          title: "fix(security): update dependencies to resolve vulnerabilities"
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          commit-message: "fix(deps): automated npm audit fixes [security]"
+          title: "fix(deps): automated npm audit fixes [security]"
           body: |
             Automated dependency security updates.
 
@@ -78,21 +80,9 @@ jobs:
             ## Command
             ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only --audit-level=moderate`' }}
 
-            ## Changes
-            - Updated dependency lockfile to resolve security vulnerabilities
-            - ${{ github.event.inputs.force_fix == 'true' && 'May include updates to `package.json` (breaking changes possible)' || 'No changes to `package.json` dependencies' }}
-
-            ## Testing
-            Run the full test suite on this PR before merging.
-
-            ## Notes
-            - Schedule: Every Monday at 05:00 UTC
-            - Safe mode: Fixes vulnerabilities without breaking changes
-            - Force mode: Available via manual workflow dispatch (may include breaking changes)
-
             ## Automation
-            This PR was automatically created by the Weekly Dependency Audit Fix workflow.
-          branch: "audit-fix-${{ github.run_id }}"
+            This PR was automatically created.
+          branch: "npm-audit-fix-${{ github.run_id }}"
           base: main
           labels: |
             dependencies
