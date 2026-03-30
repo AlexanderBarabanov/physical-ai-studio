@@ -16,8 +16,7 @@ jobs:
   audit-fix:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # to create commits and PRs
-      pull-requests: write # to create PRs
+      contents: read # to checkout code
 
     steps:
       - name: Checkout repository
@@ -62,13 +61,20 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
+      # GitHub App token is required to trigger other workflows (GITHUB_TOKEN cannot trigger workflows)
+      - name: Get token
+        if: steps.check-changes.outputs.changed == 'true'
+        id: get-github-app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PEM }}
+      
       - name: Create PR if lockfile changed
         if: steps.check-changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v7.0.5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
-          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          token: ${{ steps.get-github-app-token.outputs.token }}
           commit-message: "fix(deps): automated npm audit fixes [security]"
           title: "fix(deps): automated npm audit fixes [security]"
           body: |
@@ -84,7 +90,4 @@ jobs:
             This PR was automatically created.
           branch: "npm-audit-fix-${{ github.run_id }}"
           base: main
-          labels: |
-            dependencies
-            security
           delete-branch: true
