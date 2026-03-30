@@ -2,7 +2,7 @@ name: NPM Audit Fix
 
 on:
   schedule:
-    - cron: "0 5 * * 1"
+    - cron: "0 3 2,16 * *"
   workflow_dispatch:
     inputs:
       force_fix:
@@ -77,11 +77,11 @@ jobs:
           token: ${{ steps.get-github-app-token.outputs.token }}
           author: test-renovate-bot-12345[bot] <211697243+test-renovate-bot-12345[bot]@users.noreply.github.com>
           committer: test-renovate-bot-12345[bot] <211697243+test-renovate-bot-12345[bot]@users.noreply.github.com>
-          commit-message: "fix(deps): automated npm audit fixes [security]"
-          title: "fix(deps): automated npm audit fixes [security]"
+          commit-message: "fix(deps): npm audit fixes [security]"
+          title: "fix(deps): npm audit fixes [security]"
           body: |
             This PR was automatically created to update NPM dependencies with:
-            ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only --audit-level=moderate`' }}
+            ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only`' }}
           branch: "npm-audit-fix-${{ github.run_id }}"
           base: main
           delete-branch: true
