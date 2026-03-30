@@ -1,4 +1,4 @@
-name: Weekly Dependency Audit Fix
+name: NPM Audit Fix
 
 on:
   schedule:
@@ -13,7 +13,7 @@ on:
 permissions: {} # No permissions by default on workflow level
 
 jobs:
-  audit-fix:
+  npm-audit-fix:
     runs-on: ubuntu-latest
     permissions:
       contents: read # to checkout code
@@ -49,7 +49,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_fix == 'true' }}
         working-directory: application/ui
         continue-on-error: true
-        run: npm audit fix --force
+        run: npm audit fix --force || true
 
       - name: Check for changes
         id: check-changes
@@ -69,25 +69,31 @@ jobs:
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PEM }}
-      
+
+      - name: Get app details
+        if: steps.check-changes.outputs.changed == 'true'
+        id: app-details
+        run: |
+          APP_SLUG=$(gh api /app --jq '.slug')
+          BOT_USER=$(gh api "/users/${APP_SLUG}[bot]" --jq '.id')
+          echo "author=${APP_SLUG}[bot] <${BOT_USER}+${APP_SLUG}[bot]@users.noreply.github.com>" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ steps.get-github-app-token.outputs.token }}
+
       - name: Create PR if lockfile changed
         if: steps.check-changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v7.0.5
         with:
           token: ${{ steps.get-github-app-token.outputs.token }}
+          author: ${{ steps.app-details.outputs.author }}
+          committer: ${{ steps.app-details.outputs.author }}
           commit-message: "fix(deps): automated npm audit fixes [security]"
           title: "fix(deps): automated npm audit fixes [security]"
           body: |
-            Automated dependency security updates.
+            This PR was automatically created to update NPM dependencies with:
 
-            ## Mode
-            ${{ github.event_name == 'schedule' && 'Safe mode (scheduled)' || (github.event.inputs.force_fix == 'true' && 'Force mode (manual)' || 'Safe mode (manual)') }}
-
-            ## Command
             ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only --audit-level=moderate`' }}
 
-            ## Automation
-            This PR was automatically created.
           branch: "npm-audit-fix-${{ github.run_id }}"
           base: main
           delete-branch: true
