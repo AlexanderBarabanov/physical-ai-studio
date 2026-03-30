@@ -3,7 +3,13 @@ name: Weekly Dependency Audit Fix
 on:
   schedule:
     - cron: "0 5 * * 1"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_fix:
+        description: "Run npm audit fix --force (includes breaking changes)"
+        required: false
+        default: false
+        type: boolean
 permissions: {} # No permissions by default on workflow level
 
 jobs:
@@ -28,12 +34,23 @@ jobs:
         working-directory: application/ui
         run: npm ci
 
-      - name: Run npm audit fix (lockfile-only)
+      - name: Display audit report
         working-directory: application/ui
         continue-on-error: true
         run: |
-          npm audit fix --package-lock-only || true
-          npm audit > audit-report.txt || true
+          npm audit || true
+
+      - name: Run npm audit fix (safe mode)
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.force_fix != 'true' }}
+        working-directory: application/ui
+        continue-on-error: true
+        run: npm audit fix --package-lock-only || echo "Some issues could not be auto-fixed"
+
+      - name: Run npm audit fix (force mode)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_fix == 'true' }}
+        working-directory: application/ui
+        continue-on-error: true
+        run: npm audit fix --force
 
       - name: Check for changes
         id: check-changes
@@ -44,36 +61,40 @@ jobs:
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-          if [ -f audit-report.txt ]; then
-            echo "audit-report<<EOF" >> $GITHUB_OUTPUT
-            cat audit-report.txt >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create PR if lockfile changed
         if: steps.check-changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5b4a9f6a9e2af26e5f02351490b90d01eb8ec1e5 # v7.0.5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update lockfile with npm audit fix"
-          title: "fix: update package-lock to resolve vulnerabilities"
+          commit-message: "chore(security): automated npm audit fixes"
+          title: "fix(security): update dependencies to resolve vulnerabilities"
           body: |
-            This PR updates `package-lock.json` using `npm audit fix --package-lock-only`.
+            Automated dependency security updates.
+
+            ## Mode
+            ${{ github.event_name == 'schedule' && 'Safe mode (scheduled)' || (github.event.inputs.force_fix == 'true' && 'Force mode (manual)' || 'Safe mode (manual)') }}
+
+            ## Command
+            ${{ github.event.inputs.force_fix == 'true' && '`npm audit fix --force`' || '`npm audit fix --package-lock-only --audit-level=moderate`' }}
 
             ## Changes
             - Updated dependency lockfile to resolve security vulnerabilities
-            - No changes to `package.json` dependencies
+            - ${{ github.event.inputs.force_fix == 'true' && 'May include updates to `package.json` (breaking changes possible)' || 'No changes to `package.json` dependencies' }}
 
             ## Testing
             Run the full test suite on this PR before merging.
 
             ## Notes
-            Some vulnerabilities may require breaking changes and cannot be fixed automatically.
-            Review the audit report and consider running `npm audit fix --force` locally if needed,
-            or update dependencies manually to resolve remaining issues.
+            - Schedule: Every Monday at 05:00 UTC
+            - Safe mode: Fixes vulnerabilities without breaking changes
+            - Force mode: Available via manual workflow dispatch (may include breaking changes)
 
             ## Automation
             This PR was automatically created by the Weekly Dependency Audit Fix workflow.
           branch: "audit-fix-${{ github.run_id }}"
           base: main
+          labels: |
+            dependencies
+            security
           delete-branch: true
