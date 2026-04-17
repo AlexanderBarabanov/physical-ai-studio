@@ -82,28 +82,42 @@ jobs:
           # cache export to avoid 403 errors from GHCR.
           cache-write: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
 
-      - name: Smoke-test docker image
+      - name: Smoke-test docker image via compose
         env:
           IMAGE: ${{ steps.docker_build.outputs.image-name }}
           DEVICE: ${{ matrix.device }}
+        working-directory: application/docker
         run: |
-          CONTAINER_NAME="physical-ai-studio-healthcheck-${DEVICE}"
+          SERVICE_NAME="physical-ai-studio-${DEVICE}"
+          DEVICE_UPPER=$(echo "${DEVICE}" | tr '[:lower:]' '[:upper:]')
+          IMAGE_VAR="${DEVICE_UPPER}_IMAGE"
 
-          echo "Starting container from ${IMAGE} ..."
-          docker run -d --name "${CONTAINER_NAME}" -p 7860:7860 "${IMAGE}"
+          # Create minimal .env for CI testing
+          cat > .env << EOF
+          ${IMAGE_VAR}=${IMAGE}
+          HOST=0.0.0.0
+          PORT=7860
+          COMPOSE_PROFILES=${DEVICE}
+          EOF
 
-          # Wait up to 60 seconds for the /health endpoint to respond
-          echo "Waiting for /health endpoint ..."
+          echo "Starting service ${SERVICE_NAME} via docker compose..."
+          docker compose up -d
+
+          # Wait for health check to pass
+          echo "Waiting for container health check..."
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:7860/api/health; then
-              echo ""
-              echo "Backend health check passed!"
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${SERVICE_NAME}" 2>/dev/null || echo "starting")
+            echo "Health status: ${STATUS}"
+
+            if [ "${STATUS}" = "healthy" ]; then
+              echo "✅ Container is healthy!"
               break
             fi
+
             if [ "$i" -eq 30 ]; then
-              echo "Backend health check failed after 60 seconds."
-              docker logs "${CONTAINER_NAME}"
-              docker rm -f "${CONTAINER_NAME}" > /dev/null 2>&1
+              echo "❌ Health check failed after 60 seconds."
+              docker compose logs
+              docker compose down -v
               exit 1
             fi
             sleep 2
@@ -121,12 +135,18 @@ jobs:
             echo "❌ HTML title check failed - expected title '$EXPECTED_TITLE' not found"
             echo "Actual HTML content:"
             echo "$HTML_CONTENT"
-            docker logs "${CONTAINER_NAME}"
-            docker rm -f "${CONTAINER_NAME}" > /dev/null 2>&1
+            docker compose logs
+            docker compose down -v
             exit 1
           fi
 
-          docker rm -f "${CONTAINER_NAME}" > /dev/null 2>&1
+          # Verify volumes were created
+          echo "Checking volumes..."
+          docker volume ls | grep physical-ai-studio-data || { echo "❌ Data volume missing"; docker compose down -v; exit 1; }
+          docker volume ls | grep physical-ai-studio-storage || { echo "❌ Storage volume missing"; docker compose down -v; exit 1; }
+          echo "✅ Volumes created successfully"
+
+          docker compose down -v
 
       - name: Get Docker image size
         id: image_size
