@@ -1,0 +1,30 @@
+name: "Images Security scan"
+
+on:
+  workflow_dispatch:
+
+permissions: {} # No permissions by default
+
+jobs:
+  trivy-image-scan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      security-events: write # Needed to upload the results to code-scanning dashboard
+    strategy:
+      matrix:
+        ai-device: [cpu]
+    steps:
+      - name: Run container image scan (${{ matrix.ai-device }})
+        uses: open-edge-platform/geti-ci/actions/trivy@7e686c1248b3939f8ee8e04e2612da727e379d91
+        with:
+          artifact-name: "trivy-scan-container-${{ matrix.ai-device }}"
+          scan_type: "image"
+          scan_target: "ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.ai-device }}:main"
+          scan-scope: all
+          severity: "LOW"
+          scanners: "vuln,secret,config"
+          format: "table"
+          timeout: "15m"
+          ignore_unfixed: "true"
