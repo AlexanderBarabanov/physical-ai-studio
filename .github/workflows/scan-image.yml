@@ -24,11 +24,5 @@ jobs:
         uses: ./.github/actions/trivy-scan-image
         with:
           artifact-name: "trivy-scan-container-${{ matrix.ai-device }}"
-          scan_type: "image"
-          scan_target: "ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.ai-device }}:main"
-          scan-scope: all
-          severity: "LOW"
-          scanners: "vuln,secret,config"
-          format: "table"
-          timeout: "15m"
+          image: "ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.ai-device }}:main"
           ignore_unfixed: "true"
