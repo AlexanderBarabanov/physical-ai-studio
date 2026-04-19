@@ -3,6 +3,7 @@ description: "Security scanner for container images"
 
 # TODO scanners: "vuln,secret,config"
 # TODO need to unify approach to input severity
+# pass second contaienr image to remove base image issues -> renovate
 
 inputs:
   artifact-name:
@@ -128,15 +129,26 @@ runs:
         REPO: ${{ github.repository }}
       run: |
         echo "Fetching Dependabot alerts from GitHub Security dashboard..."
+        
+        # Check token permissions
+        echo "Checking GitHub token permissions..."
+        gh api /repos/$REPO -q '.permissions' || echo "Unable to verify permissions"
 
         # Fetch all open Dependabot alerts with pagination
+        echo "Attempting to fetch Dependabot alerts..."
         gh api \
           -H "Accept: application/vnd.github+json" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
           --paginate \
           "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
-          > dependabot-alerts.json || {
-            echo "::warning::Failed to fetch Dependabot alerts (API error or no access). Deduplication will be skipped."
+          > dependabot-alerts.json 2>&1 || {
+            ERROR_CODE=$?
+            echo "::warning::Failed to fetch Dependabot alerts (HTTP 403)."
+            echo "::warning::Possible causes:"
+            echo "::warning::  1. Dependabot is not enabled on this repository"
+            echo "::warning::  2. Organization security settings block API access"
+            echo "::warning::  3. Repository requires additional authentication"
+            echo "::warning::Deduplication will be skipped. All Trivy findings will be reported."
             echo "deduplication_available=false" >> $GITHUB_OUTPUT
             exit 0
           }
