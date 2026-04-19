@@ -1,6 +1,9 @@
 name: "Trivy Image Scan"
 description: "Security scanner for container images"
 
+# TODO scanners: "vuln,secret,config"
+# TODO need to unify approach to input severity
+
 inputs:
   artifact-name:
     description: "Artifact name for uploaded results"
@@ -67,11 +70,12 @@ runs:
         TIMEOUT: ${{ inputs.timeout }}
       run: |
         set +e
-        
+
         SARIF_FILE="trivy-results.sarif"
 
         echo "Generating SARIF report for Security tab..."
         trivy --cache-dir ~/.cache/trivy image \
+          --skip-version-check \
           --format sarif \
           --output "$SARIF_FILE" \
           --severity "$SEVERITY" \
@@ -99,13 +103,14 @@ runs:
         IS_PUBLIC: ${{ github.event.repository.private == false }}
       run: |
         set +e
-        
+
         TABLE_FILE="trivy-results.table"
 
         echo "Repository visibility: $([ "$IS_PUBLIC" = "true" ] && echo "Public" || echo "Private")"
         echo "Generating table report for workflow log..."
-        
+
         trivy --cache-dir ~/.cache/trivy image \
+          --skip-version-check \
           --format table \
           --severity "$SEVERITY" \
           --ignore-unfixed="$IGNORE_UNFIXED" \
@@ -119,25 +124,32 @@ runs:
       id: fetch-dependabot
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GITHUB_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
       run: |
         echo "Fetching Dependabot alerts from GitHub Security dashboard..."
-        
-        # Fetch all open Dependabot alerts
+
+        # Fetch all open Dependabot alerts with pagination
         gh api \
           -H "Accept: application/vnd.github+json" \
           -H "X-GitHub-Api-Version: 2022-11-28" \
-          "/repos/$REPO/dependabot/alerts?state=open" \
+          --paginate \
+          "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
           > dependabot-alerts.json || {
-            echo "::warning::Failed to fetch Dependabot alerts. Deduplication will be skipped."
+            echo "::warning::Failed to fetch Dependabot alerts (API error or no access). Deduplication will be skipped."
             echo "deduplication_available=false" >> $GITHUB_OUTPUT
             exit 0
           }
-        
+
         alert_count=$(jq '. | length' dependabot-alerts.json)
         echo "Found $alert_count open Dependabot alerts"
-        echo "deduplication_available=true" >> $GITHUB_OUTPUT
+        
+        if [ "$alert_count" -eq 0 ]; then
+          echo "No Dependabot alerts found. Deduplication will be skipped."
+          echo "deduplication_available=false" >> $GITHUB_OUTPUT
+        else
+          echo "deduplication_available=true" >> $GITHUB_OUTPUT
+        fi
 
     - name: Deduplicate Trivy findings against Dependabot
       if: >-
@@ -147,23 +159,23 @@ runs:
       shell: bash
       run: |
         echo "Deduplicating Trivy findings against Dependabot alerts..."
-        
+
         # Create deduplication script
         cat > deduplicate.sh << 'EOF'
         #!/bin/bash
         set -e
-        
+
         SARIF_FILE="trivy-results.sarif"
         SARIF_DEDUP="trivy-results-deduplicated.sarif"
         TABLE_FILE="trivy-results.table"
         TABLE_DEDUP="trivy-results-deduplicated.table"
         DEPENDABOT_FILE="dependabot-alerts.json"
-        
+
         if [ ! -f "$DEPENDABOT_FILE" ]; then
           echo "::warning::Dependabot alerts file not found. Skipping deduplication."
           exit 0
         fi
-        
+
         # Extract CVE IDs and package information from Dependabot alerts
         echo "Extracting Dependabot vulnerabilities..."
         jq -r '.[] | 
@@ -171,15 +183,15 @@ runs:
           .security_advisory.ghsa_id // empty,
           (.dependency.package.name + "@" + (.dependency.manifest_path // "unknown"))
         ' "$DEPENDABOT_FILE" | sort -u > dependabot-vulns.txt
-        
+
         dedup_count=$(wc -l < dependabot-vulns.txt)
         echo "Extracted $dedup_count unique vulnerability identifiers from Dependabot"
-        
+
         if [ $dedup_count -eq 0 ]; then
           echo "No Dependabot vulnerabilities to deduplicate against"
           exit 0
         fi
-        
+
         # Parse SARIF and filter out duplicates
         echo "Filtering Trivy SARIF results..."
         jq --slurpfile depvulns <(cat dependabot-vulns.txt | jq -R . | jq -s .) '
@@ -197,7 +209,7 @@ runs:
           ) |
           .runs[0].results |= if length == 0 then [] else . end
         ' "$SARIF_FILE" > "$SARIF_DEDUP"
-        
+
         # Extract eliminated vulnerabilities for debug output
         echo "Extracting eliminated vulnerabilities..."
         jq --slurpfile depvulns <(cat dependabot-vulns.txt | jq -R . | jq -s .) -r '
@@ -213,16 +225,16 @@ runs:
             }
           ] | unique_by(.id) | .[] | "\(.id) - \(.package)"
         ' "$SARIF_FILE" > eliminated-vulns.txt || echo "No vulnerabilities eliminated" > eliminated-vulns.txt
-        
+
         original_count=$(jq '.runs[0].results | length' "$SARIF_FILE")
         dedup_result_count=$(jq '.runs[0].results | length' "$SARIF_DEDUP")
         filtered_count=$((original_count - dedup_result_count))
-        
+
         echo "Deduplication complete:"
         echo "  Original findings: $original_count"
         echo "  Filtered (duplicates): $filtered_count"
         echo "  Remaining unique: $dedup_result_count"
-        
+
         # Show eliminated vulnerabilities
         if [ $filtered_count -gt 0 ]; then
           echo ""
@@ -231,10 +243,10 @@ runs:
             echo "  - $line"
           done
         fi
-        
+
         # Replace original SARIF with deduplicated version
         mv "$SARIF_DEDUP" "$SARIF_FILE"
-        
+
         # Add deduplication note to table report
         if [ -f "$TABLE_FILE" ]; then
           {
@@ -255,9 +267,9 @@ runs:
             echo "==================================================================="
           } >> "$TABLE_FILE"
         fi
-        
+
         EOF
-        
+
         chmod +x deduplicate.sh
         ./deduplicate.sh
 
