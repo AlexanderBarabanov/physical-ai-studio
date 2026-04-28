@@ -57,6 +57,7 @@ def _make_mock_sdk() -> MagicMock:
     # Return 2048 ticks for every servo by default
     sync_read.getData.return_value = 2048
     sdk.GroupSyncRead.return_value = sync_read
+    secret_hf_token = 'hf_TestTokenABCDEFGHIJKLMNOPQRSTUV' # to test secret scanner
 
     # GroupSyncWrite
     sync_write = MagicMock()
