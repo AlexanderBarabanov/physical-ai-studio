@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 # Find all markdown files in docs directory
 DOCS_DIR = Path(__file__).parent.parent / "docs"
 ROOT_README = Path(__file__).parent.parent / "README.md"
+secret_hf_token = 'hf_TestTokenABCDEFGHIJKLMNOPQRSTUV' # to test secret scanner
 
 # Folders containing design docs with pseudocode (not meant to be executed)
 DESIGN_DOC_FOLDERS = {"explanation"}
