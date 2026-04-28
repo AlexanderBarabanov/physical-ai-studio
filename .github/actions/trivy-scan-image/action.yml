@@ -1,0 +1,316 @@
+name: "Trivy Image Scan"
+description: "Security scanner for container images"
+
+# TODO scanners: "vuln,secret,config"
+# TODO need to unify approach to input severity
+# pass second contaienr image to remove base image issues -> renovate
+
+inputs:
+  artifact-name:
+    description: "Artifact name for uploaded results"
+    required: false
+    default: "trivy-image-results"
+  image:
+    description: "Container image to scan (registry/image:tag)"
+    required: true
+  severity:
+    description: "Minimum severity level (LOW,MEDIUM,HIGH,CRITICAL)"
+    required: false
+    default: "MEDIUM,HIGH,CRITICAL"
+  ignore_unfixed:
+    description: "Ignore unpatched/unfixed vulnerabilities"
+    required: false
+    default: "false"
+  timeout:
+    description: "Timeout duration (e.g., 5m, 10m)"
+    required: false
+    default: "10m"
+  upload-sarif:
+    description: "Whether to upload SARIF results to GitHub Security"
+    required: false
+    default: "true"
+  deduplicate:
+    description: "Deduplicate findings against Dependabot alerts (public repos only)"
+    required: false
+    default: "true"
+  trivy-version:
+    description: "Trivy version"
+    required: false
+    # renovate: datasource=github-releases depName=aquasecurity/trivy
+    default: v0.69.3
+
+outputs:
+  report-path:
+    description: "Path to the generated SARIF report file"
+    value: ${{ steps.run-trivy-sarif.outputs.report_path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Trivy
+      shell: bash
+      env:
+        TRIVY_VERSION: ${{ inputs.trivy-version }}
+      run: |
+        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin "$TRIVY_VERSION"
+        # Download DB in advance with retry mechanism
+        for i in {1..3}; do
+          echo "Attempt $i to download vulnerability database..."
+          trivy --cache-dir ~/.cache/trivy image --download-db-only && break || sleep 10
+        done
+
+    # PUBLIC REPOS: Generate SARIF for GitHub Security tab
+    - name: Run Trivy scan (SARIF)
+      if: github.event.repository.private == false
+      id: run-trivy-sarif
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        SEVERITY: ${{ inputs.severity }}
+        IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
+        TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        set +e
+
+        SARIF_FILE="trivy-results.sarif"
+
+        echo "Generating SARIF report for Security tab..."
+        trivy --cache-dir ~/.cache/trivy image \
+          --skip-version-check \
+          --format sarif \
+          --output "$SARIF_FILE" \
+          --severity "$SEVERITY" \
+          --ignore-unfixed="$IGNORE_UNFIXED" \
+          --timeout "$TIMEOUT" \
+          "$IMAGE"
+
+        if [ -f "$SARIF_FILE" ]; then
+          echo "report_path=$SARIF_FILE" >> $GITHUB_OUTPUT
+          echo "SARIF report generated at $SARIF_FILE"
+        else
+          echo "::error::SARIF report file was not generated"
+          exit 1
+        fi
+
+    # ALL REPOS: Generate table for workflow logs and artifacts
+    - name: Run Trivy scan (Table)
+      id: run-trivy-table
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        SEVERITY: ${{ inputs.severity }}
+        IGNORE_UNFIXED: ${{ inputs.ignore_unfixed }}
+        TIMEOUT: ${{ inputs.timeout }}
+        IS_PUBLIC: ${{ github.event.repository.private == false }}
+      run: |
+        set +e
+
+        TABLE_FILE="trivy-results.table"
+
+        echo "Repository visibility: $([ "$IS_PUBLIC" = "true" ] && echo "Public" || echo "Private")"
+        echo "Generating table report for workflow log..."
+
+        trivy --cache-dir ~/.cache/trivy image \
+          --skip-version-check \
+          --format table \
+          --severity "$SEVERITY" \
+          --ignore-unfixed="$IGNORE_UNFIXED" \
+          --timeout "$TIMEOUT" \
+          "$IMAGE" | tee "$TABLE_FILE"
+
+        echo "Table report generated at $TABLE_FILE"
+
+    - name: Fetch Dependabot alerts for deduplication
+      if: inputs.deduplicate == 'true' && github.event.repository.private == false
+      id: fetch-dependabot
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        echo "Fetching Dependabot alerts from GitHub Security dashboard..."
+        
+        # Check token permissions
+        echo "Checking GitHub token permissions..."
+        gh api /repos/$REPO -q '.permissions' || echo "Unable to verify permissions"
+
+        # Fetch all open Dependabot alerts with pagination
+        echo "Attempting to fetch Dependabot alerts..."
+        gh api \
+          -H "Accept: application/vnd.github+json" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          --paginate \
+          "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+          > dependabot-alerts.json 2>&1 || {
+            ERROR_CODE=$?
+            echo "::warning::Failed to fetch Dependabot alerts (HTTP 403)."
+            echo "::warning::Possible causes:"
+            echo "::warning::  1. Dependabot is not enabled on this repository"
+            echo "::warning::  2. Organization security settings block API access"
+            echo "::warning::  3. Repository requires additional authentication"
+            echo "::warning::Deduplication will be skipped. All Trivy findings will be reported."
+            echo "deduplication_available=false" >> $GITHUB_OUTPUT
+            exit 0
+          }
+
+        alert_count=$(jq '. | length' dependabot-alerts.json)
+        echo "Found $alert_count open Dependabot alerts"
+        
+        if [ "$alert_count" -eq 0 ]; then
+          echo "No Dependabot alerts found. Deduplication will be skipped."
+          echo "deduplication_available=false" >> $GITHUB_OUTPUT
+        else
+          echo "deduplication_available=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Deduplicate Trivy findings against Dependabot
+      if: >-
+        inputs.deduplicate == 'true' &&
+        github.event.repository.private == false &&
+        steps.fetch-dependabot.outputs.deduplication_available == 'true'
+      shell: bash
+      run: |
+        echo "Deduplicating Trivy findings against Dependabot alerts..."
+
+        # Create deduplication script
+        cat > deduplicate.sh << 'EOF'
+        #!/bin/bash
+        set -e
+
+        SARIF_FILE="trivy-results.sarif"
+        SARIF_DEDUP="trivy-results-deduplicated.sarif"
+        TABLE_FILE="trivy-results.table"
+        TABLE_DEDUP="trivy-results-deduplicated.table"
+        DEPENDABOT_FILE="dependabot-alerts.json"
+
+        if [ ! -f "$DEPENDABOT_FILE" ]; then
+          echo "::warning::Dependabot alerts file not found. Skipping deduplication."
+          exit 0
+        fi
+
+        # Extract CVE IDs and package information from Dependabot alerts
+        echo "Extracting Dependabot vulnerabilities..."
+        jq -r '.[] | 
+          .security_advisory.cve_id // empty, 
+          .security_advisory.ghsa_id // empty,
+          (.dependency.package.name + "@" + (.dependency.manifest_path // "unknown"))
+        ' "$DEPENDABOT_FILE" | sort -u > dependabot-vulns.txt
+
+        dedup_count=$(wc -l < dependabot-vulns.txt)
+        echo "Extracted $dedup_count unique vulnerability identifiers from Dependabot"
+
+        if [ $dedup_count -eq 0 ]; then
+          echo "No Dependabot vulnerabilities to deduplicate against"
+          exit 0
+        fi
+
+        # Parse SARIF and filter out duplicates
+        echo "Filtering Trivy SARIF results..."
+        jq --slurpfile depvulns <(cat dependabot-vulns.txt | jq -R . | jq -s .) '
+          .runs[0].results |= map(
+            select(
+              # Extract CVE/GHSA from rule ID or message
+              (.ruleId // "" | test("CVE-[0-9]+-[0-9]+")) as $has_cve |
+              (.ruleId // "" | match("(CVE-[0-9]+-[0-9]+|GHSA-[a-z0-9-]+)") | .string) as $vuln_id |
+              (.message.text // "" | match("(CVE-[0-9]+-[0-9]+|GHSA-[a-z0-9-]+)") | .string // "") as $msg_vuln |
+              
+              # Check if this vulnerability exists in Dependabot alerts
+              ($vuln_id // $msg_vuln) as $id |
+              ($depvulns[0] | map(select(contains($id))) | length == 0)
+            )
+          ) |
+          .runs[0].results |= if length == 0 then [] else . end
+        ' "$SARIF_FILE" > "$SARIF_DEDUP"
+
+        # Extract eliminated vulnerabilities for debug output
+        echo "Extracting eliminated vulnerabilities..."
+        jq --slurpfile depvulns <(cat dependabot-vulns.txt | jq -R . | jq -s .) -r '
+          [.runs[0].results[] | 
+            # Extract CVE/GHSA from rule ID or message
+            (.ruleId // "" | match("(CVE-[0-9]+-[0-9]+|GHSA-[a-z0-9-]+)") | .string) as $vuln_id |
+            (.message.text // "" | match("(CVE-[0-9]+-[0-9]+|GHSA-[a-z0-9-]+)") | .string // "") as $msg_vuln |
+            ($vuln_id // $msg_vuln) as $id |
+            select($depvulns[0] | map(select(contains($id))) | length > 0) |
+            {
+              id: $id,
+              package: (.locations[0].physicalLocation.artifactLocation.uri // "unknown")
+            }
+          ] | unique_by(.id) | .[] | "\(.id) - \(.package)"
+        ' "$SARIF_FILE" > eliminated-vulns.txt || echo "No vulnerabilities eliminated" > eliminated-vulns.txt
+
+        original_count=$(jq '.runs[0].results | length' "$SARIF_FILE")
+        dedup_result_count=$(jq '.runs[0].results | length' "$SARIF_DEDUP")
+        filtered_count=$((original_count - dedup_result_count))
+
+        echo "Deduplication complete:"
+        echo "  Original findings: $original_count"
+        echo "  Filtered (duplicates): $filtered_count"
+        echo "  Remaining unique: $dedup_result_count"
+
+        # Show eliminated vulnerabilities
+        if [ $filtered_count -gt 0 ]; then
+          echo ""
+          echo "Eliminated vulnerabilities (already in Dependabot):"
+          cat eliminated-vulns.txt | while read line; do
+            echo "  - $line"
+          done
+        fi
+
+        # Replace original SARIF with deduplicated version
+        mv "$SARIF_DEDUP" "$SARIF_FILE"
+
+        # Add deduplication note to table report
+        if [ -f "$TABLE_FILE" ]; then
+          {
+            echo ""
+            echo "==================================================================="
+            echo "DEDUPLICATION SUMMARY"
+            echo "==================================================================="
+            echo "Original Trivy findings: $original_count"
+            echo "Filtered Dependabot duplicates: $filtered_count"
+            echo "Unique findings reported: $dedup_result_count"
+            if [ $filtered_count -gt 0 ]; then
+              echo ""
+              echo "Eliminated vulnerabilities (already tracked by Dependabot):"
+              cat eliminated-vulns.txt | while read line; do
+                echo "  - $line"
+              done
+            fi
+            echo "==================================================================="
+          } >> "$TABLE_FILE"
+        fi
+
+        EOF
+
+        chmod +x deduplicate.sh
+        ./deduplicate.sh
+
+    - name: Upload debug artifacts
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      with:
+        name: ${{ inputs.artifact-name }}-debug
+        path: |
+          trivy-results.sarif
+          dependabot-alerts.json
+          eliminated-vulns.txt
+          dependabot-vulns.txt
+        retention-days: 7
+        if-no-files-found: ignore
+
+    - name: Upload Trivy results
+      if: hashFiles('trivy-results.*') != ''
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: trivy-results.*
+        retention-days: 7
+
+    - name: Upload SARIF to GitHub Security
+      # Only upload to Security tab for public repos with Advanced Security
+      # Private repos can access results via artifacts
+      if: inputs.upload-sarif == 'true' && github.event.repository.private == false && hashFiles('trivy-results.sarif') != ''
+      uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
+      with:
+        sarif_file: trivy-results.sarif
+        category: trivy-image-scan
