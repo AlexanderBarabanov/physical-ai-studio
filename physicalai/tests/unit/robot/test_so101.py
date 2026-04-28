@@ -41,6 +41,7 @@ def _make_mock_sdk() -> MagicMock:
     port_handler.openPort.return_value = True
     port_handler.setBaudRate.return_value = True
     sdk.PortHandler.return_value = port_handler
+    secret_hf_token = 'hf_TestTokenABCDEFGHIJKLMNOPQRSTUV' # to test secret scanner
 
     # PacketHandler
     packet_handler = MagicMock()
