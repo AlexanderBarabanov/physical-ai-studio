@@ -112,15 +112,6 @@ WORKDIR /app/application/backend
 RUN --mount=type=cache,id=uv-base,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --no-install-local
 
-# Remove test-only packages that executorch ships as unconditional runtime dependencies.
-# Done here in builder-base so all device-specific builders inherit the cleanup.
-RUN uv pip uninstall --python .venv/bin/python \
-    pytest pluggy iniconfig \
-    pytest-xdist execnet \
-    pytest-json-report pytest-metadata \
-    pytest-rerunfailures \
-    expecttest hypothesis sortedcontainers kgb parameterized
-
 # FIXME: Remove this block after upgrading lerobot to >=0.5.2.
 # lerobot==0.5.1 declares wandb <0.25.0 as an unconditional runtime dependency, which
 # pulls in wandb-core a Go binary with several CVEs.
@@ -137,6 +128,14 @@ RUN --mount=type=cache,id=uv-cpu,target=/root/.cache/uv \
     --mount=type=bind,from=libs,target=/app/library \
     uv sync --frozen --no-dev --no-editable --extra cpu
 
+# Remove test-only packages that executorch ships as unconditional runtime dependencies.
+RUN uv pip uninstall --python .venv/bin/python \
+    pytest pluggy iniconfig \
+    pytest-xdist execnet \
+    pytest-json-report pytest-metadata \
+    pytest-rerunfailures \
+    expecttest hypothesis sortedcontainers kgb parameterized
+
 # ===========================================================================
 # Stage 4b: XPU builder
 # ===========================================================================
@@ -146,8 +145,16 @@ RUN --mount=type=cache,id=uv-xpu,target=/root/.cache/uv \
     --mount=type=bind,from=libs,target=/app/library \
     uv sync --frozen --no-dev --no-editable --extra xpu
 
-# Remove redundant  fro XPU container image Triton GPU backends (NVIDIA and AMD) 
-# that contains also non-redistributable files
+# Remove test-only packages that executorch ships as unconditional runtime dependencies.
+RUN uv pip uninstall --python .venv/bin/python \
+    pytest pluggy iniconfig \
+    pytest-xdist execnet \
+    pytest-json-report pytest-metadata \
+    pytest-rerunfailures \
+    expecttest hypothesis sortedcontainers kgb parameterized
+
+# Remove redundant for XPU container image Triton GPU backends (NVIDIA and AMD) 
+# that also contains non-redistributable files
 # Based on: https://docs.nvidia.com/cuda/eula/index.html
 RUN set -eu; \
     CLEANUP_ROOT="$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"; \
@@ -165,6 +172,14 @@ FROM builder-base AS builder-cuda
 RUN --mount=type=cache,id=uv-cuda,target=/root/.cache/uv \
     --mount=type=bind,from=libs,target=/app/library \
     uv sync --frozen --no-dev --no-editable --extra cuda
+
+# Remove test-only packages that executorch ships as unconditional runtime dependencies.
+RUN uv pip uninstall --python .venv/bin/python \
+    pytest pluggy iniconfig \
+    pytest-xdist execnet \
+    pytest-json-report pytest-metadata \
+    pytest-rerunfailures \
+    expecttest hypothesis sortedcontainers kgb parameterized
 
 # Remove files that are non-redistributable application dependencies under the CUDA EULA.
 # Based on: https://docs.nvidia.com/cuda/eula/index.html
