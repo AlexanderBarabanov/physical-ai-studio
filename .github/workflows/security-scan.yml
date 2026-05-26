@@ -222,7 +222,7 @@ jobs:
         with:
           artifact-name: "trivy-scan-container-${{ matrix.ai-device }}"
           scan_type: "image"
-          scan_target: "ghcr.io/alexanderbarabanov/physical-ai-studio-${{ matrix.ai-device }}:main"
+          scan_target: "ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.ai-device }}:main"
           scan-scope: all
           severity: "LOW"
           scanners: "vuln,secret,config"
