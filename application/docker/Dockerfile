@@ -189,13 +189,10 @@ RUN set -eu; \
     find "$CLEANUP_ROOT" -type d \( -name "include" -o -name "headers" \) \
         -path "*cuda*" -exec rm -rf {} + 2>/dev/null || true; \
     find "$CLEANUP_ROOT" -type d -path "*/nvidia/*/include" \
+        ! -path "*/triton/backends/nvidia/include" \
         -exec rm -rf {} + 2>/dev/null || true; \
     find "$CLEANUP_ROOT" -name "*.a" \( -path "*cuda*" -o -path "*nvidia*" \) \
         -delete 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -type d -path "*/triton/backends/nvidia/include" \
-        -exec rm -rf {} + 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -type d -path "*/triton/backends/nvidia/bin" \
-        -exec rm -rf {} + 2>/dev/null || true; \
     find "$CLEANUP_ROOT" -type f \( \
         -name "libcheckpoint.so*" -o -name "libnvperf_host.so*" -o \
         -name "libnvperf_target.so*" -o -name "libpcsamplingutil.so*" \
