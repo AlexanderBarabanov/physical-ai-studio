@@ -256,10 +256,10 @@ jobs:
           echo "Pushing ${TARGET_IMAGE}"
           docker push "${TARGET_IMAGE}"
 
-      - name: Sign Docker image
-        uses: open-edge-platform/geti-ci/actions/sign-image@7d25e47329bbfcde4ee51ab3581aea8613e245e2
-        with:
-          image-uri: ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.device }}:${{ needs.validate.outputs.docker_patch_tag }}
+#      - name: Sign Docker image
+#        uses: open-edge-platform/geti-ci/actions/sign-image@7d25e47329bbfcde4ee51ab3581aea8613e245e2
+#        with:
+#          image-uri: ghcr.io/open-edge-platform/physical-ai-studio-${{ matrix.device }}:${{ needs.validate.outputs.docker_patch_tag }}
 
       - name: Print summary
         env:
