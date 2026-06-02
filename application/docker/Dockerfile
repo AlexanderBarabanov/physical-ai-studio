@@ -181,27 +181,6 @@ RUN uv pip uninstall --python .venv/bin/python \
     pytest-rerunfailures \
     expecttest hypothesis sortedcontainers kgb parameterized
 
-# Remove files that are non-redistributable application dependencies under the CUDA EULA.
-# Based on: https://docs.nvidia.com/cuda/eula/index.html
-RUN set -eu; \
-    CLEANUP_ROOT="$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"; \
-    [ -n "$CLEANUP_ROOT" ] && [ -d "$CLEANUP_ROOT" ]; \
-    find "$CLEANUP_ROOT" -type d \( -name "include" -o -name "headers" \) \
-        -path "*cuda*" -exec rm -rf {} + 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -type d -path "*/nvidia/*/include" \
-        ! -path "*/triton/backends/nvidia/include" \
-        -exec rm -rf {} + 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -name "*.a" \( -path "*cuda*" -o -path "*nvidia*" \) \
-        -delete 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -type f \( \
-        -name "libcheckpoint.so*" -o -name "libnvperf_host.so*" -o \
-        -name "libnvperf_target.so*" -o -name "libpcsamplingutil.so*" \
-    \) -path "*cupti*" -delete 2>/dev/null || true; \
-    find "$CLEANUP_ROOT" -name "libcusolverMg.so*" -delete 2>/dev/null || true; \
-    # Remove the AMD triton backend — not needed in CUDA images
-    find "$CLEANUP_ROOT" -type d -path "*/triton/backends/amd" \
-        -exec rm -rf {} + 2>/dev/null || true
-
 # ===========================================================================
 # Stage 5: Runtime base — shared across all hardware targets
 #
