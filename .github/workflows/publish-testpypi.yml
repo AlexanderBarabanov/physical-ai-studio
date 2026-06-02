@@ -7,7 +7,7 @@ permissions: {}
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
@@ -32,7 +32,7 @@ jobs:
           path: library/dist/
 
   smoke-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     needs: build
     permissions:
       contents: read
@@ -67,7 +67,7 @@ jobs:
           PY
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     needs: smoke-test
     permissions:
       id-token: write

@@ -3,14 +3,48 @@ name: Publish PyPI
 on:
   push:
     tags:
-      - 'lib/v[0-9]+\.[0-9]+\.[0-9]'
+      - 'lib/v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
+  validate:
+    name: Validate lib tag
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate tag version matches pyproject.toml
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Extract version from tag: lib/v0.1.0 -> 0.1.0
+          TAG_VERSION="${TAG#lib/v}"
+
+          # Read version from library/pyproject.toml
+          TOML_VERSION="$(grep '^version' library/pyproject.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')"
+
+          echo "Tag version:    $TAG_VERSION"
+          echo "pyproject.toml: $TOML_VERSION"
+
+          if [[ "$TAG_VERSION" != "$TOML_VERSION" ]]; then
+            echo "::error::Tag version '$TAG_VERSION' does not match pyproject.toml version '$TOML_VERSION'"
+            exit 1
+          fi
+          echo "✓ Tag version matches pyproject.toml"
+
   build:
-    runs-on: ubuntu-latest
+    needs: validate
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
@@ -35,7 +69,7 @@ jobs:
           path: library/dist/
 
   smoke-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     needs: build
     permissions:
       contents: read
@@ -70,9 +104,9 @@ jobs:
           PY
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.repository_owner == 'open-edge-platform' && 'overflow' || 'ubuntu-latest' }}
     needs: smoke-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/lib/v')
     permissions:
       id-token: write
     steps:
